@@ -11,6 +11,30 @@ function Env(t, s) {
             this.startTime = new Date().getTime();
             Object.assign(this, s);
             this.log(`\ud83d\udd14${this.name},\u5f00\u59cb!`);
+            this.bucket = ''
+            this.fs = require("fs");
+        }
+        async get(key, def = null) {
+            if (!this.isNode()) return def;
+            try {
+                const data = await this.fs.promises.readFile(this.bucket, "utf-8");
+                const json = JSON.parse(data);
+                return json.hasOwnProperty(key) ? json[key] : def;
+            } catch (e) {
+                this.log("❌ 读取bucket失败: " + e.message);
+                return def;
+            }
+        }
+        async set(key, value) {
+            if (!this.isNode()) return;
+            try {
+                const data = await this.fs.promises.readFile(this.bucket, "utf-8");
+                const json = JSON.parse(data);
+                json[key] = value;
+                await this.fs.promises.writeFile(this.bucket, JSON.stringify(json, null, 2));
+            } catch (e) {
+                this.log("❌ 写入bucket失败: " + e.message);
+            }
         }
         checkEnv(ckName) {
             const envSplitor = ["&", "\n"];
@@ -19,19 +43,22 @@ function Env(t, s) {
             this.userCount = this.userList.length;
             this.log(`共找到${this.userCount}个账号`);
         }
+        toStr(v) {
+            if (v instanceof Error) return v.stack || v.message;
+            if (v && typeof v == "object") try { return JSON.stringify(v) } catch { return "[Complex Object]" }
+            return String(v);
+        }
         async sendMsg() {
             this.log("==============📣Center 通知📣==============")
-            for (let i = 0; i < this.notifyStr.length; i++) {
-                if (Object.prototype.toString.call(this.notifyStr[i]) === '[object Object]' ||
-                    Object.prototype.toString.call(this.notifyStr[i]) === '[object Array]') {
-                    this.notifyStr[i] = JSON.stringify(this.notifyStr[i]);
-                }
-            }
             let message = this.notifyStr.join(this.logSeparator);
             if (this.isNode()) {
-                const notify = require("./sendNotify.js")
-                await notify.sendNotify(this.name, message);
-            } else {
+                try {
+                    const { sendNotify } = require("./sendNotify.js")
+                    await sendNotify(this.name, message);
+                } catch (e) {
+                    console.error(e.code === "MODULE_NOT_FOUND" ? "发送通知失败: 未找到 sendNotify.js 模块" : `发送通知失败: sendNotify.js 内部错误 (${e.message})`);
+                }
+
             }
         }
         isNode() {
@@ -47,16 +74,7 @@ function Env(t, s) {
             return ret.join(c);
         }
         getURLParams(url) {
-            const params = {};
-            const queryString = url.split("?")[1];
-            if (queryString) {
-                const paramPairs = queryString.split("&");
-                paramPairs.forEach((pair) => {
-                    const [key, value] = pair.split("=");
-                    params[key] = value;
-                });
-            }
-            return params;
+            try { return Object.fromEntries(new URL(url, "http://localhost").searchParams) } catch { return {} }
         }
         isJSONString(str) {
             try {
@@ -126,11 +144,15 @@ function Env(t, s) {
         }
 
         log(content) {
-            this.notifyStr.push(content)
+
+            this.notifyStr.push(`[${this.time("HH:mm:ss")}]` + " " + this.toStr(content))
             console.log(content)
         }
-        wait(t) {
-            return new Promise((s) => setTimeout(s, t));
+
+        wait(min, max = null) {
+            const ms = max == null ? min : Math.random() * (max - min + 1) + min | 0;
+            ms >= 1000 && this.log(`等待 ${(ms / 1000).toFixed(2)} 秒...`, { notify: false });
+            return new Promise(r => setTimeout(r, ms));
         }
         async done() {
             await this.sendMsg();
@@ -140,8 +162,13 @@ function Env(t, s) {
                 `\ud83d\udd14${this.name},\u7ed3\u675f!\ud83d\udd5b ${e}\u79d2`
             );
             if (this.isNode()) {
-                process.exit(1);
+                process.exit(0);
             }
+        }
+        parseCookie(ck) {
+            return typeof ck != "string" || !ck ? {} : Object.fromEntries(
+                ck.split(/;\s*/).filter(v => v.includes("=")).map(v => [v.slice(0, v.indexOf("=")), v.slice(v.indexOf("=") + 1)])
+            );
         }
     })(t, s);
 }
