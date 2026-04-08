@@ -48,7 +48,7 @@ class Task {
 			$.log(`账号[${this.index}]已签到`)
 			return
 		}
-		await this.signIn()
+		await this.signInV2()
 	}
 	async getTokenExpireTime() {
 		let options = {
@@ -112,35 +112,7 @@ class Task {
 		options.headers = Object.assign(baseHeaders, options.headers)
 		return axios.request(options)
 	}
-	async signIn() {
-		let options = {
-			method: 'POST',
-			url: `https://interface.skycolorful.com/api/User/Sign`,
-			headers: {
-				"accept": "*/*",
-				"accept-language": "zh-CN,zh;q=0.9",
-				"content-type": "application/json",
-				"sec-fetch-dest": "empty",
-				"sec-fetch-mode": "cors",
-				"sec-fetch-site": "cross-site",
-				"xweb_xhr": "1"
-			},
-			data: {
 
-			}
-		};
-		let { data: result } = await this.request(options);
-		if (result?.Code == '0') {
-			//打印签到结果
-			$.log(`🌸账号[${this.index}]` + `🕊签到${result.Message}🎉`);
-		} else {
-			$.log(`🌸账号[${this.index}] 签到-失败:${result.Message}❌`)
-		}
-
-
-
-
-	}
 	async signInV2() {
 		let options = {
 			method: 'POST',
@@ -186,6 +158,7 @@ class Task {
 		if (result?.Code == '0') {
 			//打印签到结果
 			this.signStatus = result.Data.IsSign
+
 		} else {
 		}
 	}
@@ -234,13 +207,13 @@ async function getNotice() {
 			headers: {
 				"User-Agent": defaultUserAgent,
 			},
-            timeout:3000
+			timeout: 3000
 		}
 		let {
 			data: res
 		} = await axios.request(options);
 		$.log(res)
 		return res
-	} catch (e) {}
+	} catch (e) { }
 
 }
